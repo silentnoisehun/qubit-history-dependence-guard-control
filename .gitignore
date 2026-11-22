@@ -1,0 +1,6 @@
+runs/
+*.jobid
+*report*.json
+.env
+__pycache__/
+*.pyc

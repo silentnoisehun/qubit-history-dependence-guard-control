@@ -1,0 +1,148 @@
+Qubit History Dependence: Guard-Time Control
+VEGLEGES PREREG (PROTOKOLL-JOVAHAGYASRA, NEM INDITAS), v3 protokoll
+DOI: FUGGO. Egy GitHub-repo onmagaban nem ad DOI-t; DOI csak archivalt kiadasbol (Zenodo) lesz, lasd 12. pont. Tenyleges DOI meg nincs, kitalalt azonositot nem irunk be. Ez nem referalt kozlemeny.
+Ez a dokumentum csak a protokollt rogziti. A jovahagyas nem job-inditas: minden blokkot a tulajdonos indit kulon.
+Alap: a v3 kodcsomag (egy TXT, md5 2732f8adb68b2e78658a71d50cd10caa); fajl md5-ok:
+ runner_v3.py a3f311d9110d759669d068f4319c2476
+ v3_design.py 8b43fa859ed5254700e470e6e3ad1a47
+ unrolled_v3.py a5bafd7b0ac44d0f3c3dfd5ce968c7bd
+ analysis_v3.py d22eff0c542f98beba3dba081c5eb44b
+ test_v3.py 8503712e9687e41592ea1a77757a1b7c
+ variants_V2.json cea7330cfa2d2c01c127b0ff948e3bf9
+ config.py 2c07f02028a3e7de5b828e5f16bc8f14
+ circuits3.py 7b21e01c03b9fc66e758914236889aaa
+ analyzer3.py 8a4bb17bd03843502ab340fb8918f6eb
+ unrolled_proto.py 436b65575079da1c429cd66acca53f98
+A kanonikus protokoll ez a dokumentum. A csomagbeli regi PREREG_V3_hu.txt fuggo (PENDING) pontokat tartalmaz: nem kerul a nyilvanos repora.
+
+1. KERDES ES VEGPONT (valtozatlan, Scope A)
+ Realizalt rest-fuggo kontraszt D = Lambda(0) - 0,5*(Lambda(16)+Lambda(64)), 16 blokk, t(15) 95% CI, analyzer3.analyze_campaign valtozatlanul,
+ minden szegmens poolozva. Nincs mechanizmus-allitas, a populacio-ervenyesseg nincs igazolva. Valos hatas es atcsuszas szetvalasztasa nem cel.
+ Ha barmely blokk D_k erteke NaN, az eredmeny ERVENYTELEN (nincs potlas, ezert nincs ujrafuttatas).
+
+2. MERES (a csomag kodja szerint)
+ 16 blokk = 16 job (blokk 0..15 sorrendben), blokkonkent 2 kor (v0 elore, v1 tukrozott) x 166 shot, 36 szegmens/kor, szegmensenkent sajat
+ 2 bites regiszter, reset(0),reset(1) a szegmensek kozott. Szegmens-koz guard: rovid 250 us (62500 dt) vagy hosszu 1000 us (250000 dt); a minta a
+ blokk parossaga szerint valtakozik (paros = minta, paratlan = komplementer, v1 tukrozott-komplementer). Elo ibm_marrakesh target (live plan):
+ kor-idok 28193,3 / 29693,3 / 28943,3 / 27443,3 us. Plain measure (ahogy lefordult), measure_2 nincs. optimization_level 0, ALAP, layout [21,20].
+ A guard 250/1000 us, 166 shot/PUB es a minta ezen protokoll rogzitett erteke, jovahagyas utan.
+
+3. rep_delay / init_qubits (forras: IBM Sampler options es Dynamic repetition rate doksi)
+ A runner NEM allit be rep_delay-t es init_qubits-t (Unset). A Runtime dokumentacioja szerint ilyenkor init_qubits = True (implicit reset a shot
+ elejen), rep_delay = backend.default_rep_delay (backendenkent kulonbozo; "a legtobb IBM QPU-n 250 us"; marrakeshre NEM ellenorzott ertek).
+ A runner ezeket NEM naplozza. Protokoll: az 1. blokk elott a felhasznalo tarsa lefuttatja ezt a csak-olvaso sort, es elmenti a kimenetet:
+   python -c "from qiskit_ibm_runtime import QiskitRuntimeService as S;c=S().backend('ibm_marrakesh').configuration();print(getattr(c,'default_rep_delay',None),getattr(c,'rep_delay_range',None))"
+ (A parancs a mentett alapertelmezett IBM fiokot hasznalja; az attributum a runtime 0.51.0 forraskodban a backend configuration-bol jon, a docstring szerint.) Ha az ertek nem kb. 250 us, a 6. pont becslese ujraszamitando a keplettel, mielott blokk 0 indul.
+ Ismert korlat: a shotok egymas utan futnak, a slot 0-t az elozo shot vege + init reset + rep_delay elozi meg, es a PUB-ok sorrendje nem
+ garantalt (v0/v1 felvaltva futhat). A slot 0-nak tehat fizikailag van elozmenye; a retegzett diagnosztika "nincs elozmeny"-kent kezeli, a primer
+ D poolozasban benne van.
+
+4. ELEMZES ES ERTELMEZES (elore rogzitett, nincs kozbulso CI)
+ A) CI nem tartalmazza 0-t: "nemnulla kontraszt ebben a futasban"; mechanizmus, atcsuszas, populacio nincs igazolva.
+ B) CI tartalmazza 0-t, felso hatar < +0,08: "nincs bizonyitek +0,08 nagysagu hatasra ebben a futasban" (nem bizonyitek 0-ra).
+ C) CI tartalmazza 0-t es +0,08-at: nem eldontheto; csak a CI-t jelentjuk.
+ Feltaro (leiro, nincs dontesi szabaly): D gap-osztalyonkent, G0 elozmeny-kontraszt rovid/hosszu guardra. Ezekhez eredmenyfuggo kovetkezmeny nincs kotve.
+ Az --analyze csak pontosan a 0..15 blokk teljes sorozatara ad CI-t es kategoriat (a kod kikenyszeriti). Hianyos sorozatra blokkonkenti D_k pontertekeket
+ ir ki: ezeket kozben NEM nezzuk, kozbulso kikovetkeztetes es eredmeny alapu leallitas tilos.
+
+5. LEALLITAS (csak hasznalat- es hibaalapu, eredmeny-fuggetlen)
+ a) Egy blokk csak akkor indulhat, ha az elozo blokk usage-e VEGLEGES (usage_status nem pending; ha pending: python runner_v3.py --refresh-usage --live, majd varni).
+ b) Kapu minden blokk elott (a felhasznalo kezzel ellenorzi; a kod ezt NEM kenyszeriti ki, csak a naplot adja): az eddigi vegleges usage-ok osszege +
+    (16 - eddigi blokkok szama) x az eddigi legnagyobb egy-blokk usage <= 304 s. Az 1. blokk elott az alap 11,6 s/blokk (lasd 6.).
+    Ha a feltetel NEM teljesul: STOP, tovabbi blokk nincs, a kampany hianyos (a primer CI es az A/B/C nem ervenyes, csak leiro jelentes); folytatas csak
+    uj protokollal. Ellenorzo egysoros (a futtato mappajaban, csak olvas):
+python3 -c "import glob,json;L=[json.load(open(p)) for p in sorted(glob.glob('runs/block_*.json'))];u=[x.get('usage_seconds') for x in L];ok=all(isinstance(a,(int,float)) and x.get('usage_status') not in ('pending','UNAVAILABLE',None) for a,x in zip(u,L));n=len(L);m=max(u) if ok and u else 11.6;c=sum(u) if ok else 0;pr=c+(16-n)*m;print('blocks',n,'final',ok,'cum',c,'max',m,'projected',round(pr,1),('GO' if pr<=304 else 'STOP') if ok else 'WAIT (usage not final)')"
+    Kimenet: GO = indulhat a kovetkezo blokk, STOP = leallas, WAIT = a legutobbi usage meg nem vegleges.
+ c) Kvota-keret 304 s. A kapu elorejelzes, nem kemeny korlat: nem vedi a 304 s-t abszolutan, a kovetkezo blokk tenyleges usage-e ingadozhat, csak a projekciot ellenorzi.
+
+6. KVOTA-BECSLES (az IBM doksi kepletevel; nem garancia, nem tenyleges)
+ Becsult usage/job = 2 s (sub-job overhead) + 332 vegrehajtas x (kor atlag 28568,3 us + init reset 2,72 us + rep_delay 250 us [feltetelezett default])
+ = 11,57 s; 16 blokk ~ 185 s, ha minden job egy sub-job. A tenyleges sub-job szam es usage a blokk 0 utan ismert; minden extra sub-job ~+2 s.
+ Hogy a 304 s-ba belefer-e, azt blokkonkent csak az 5. pont kapuja mutatja.
+
+7. HIBAK
+ Hibas, megszakadt vagy ismeretlen allapotu job: STOP. Ujrainditas nincs (a naplo/kapu a hibas job usage-et nem tartalmazza, ezert az ujrainditas nem biztonsagos).
+ Ismeretlen vagy nem vegleges usage: WAIT, a kovetkezo blokk nem indulhat, a kaput nem kerjuk meg.
+ Eredmeny alapu kizaras (NaN D_k miatti ujrafuttatas, szegmens eldobas) nincs. Technikai elutasitas csak ha a regiszter-shotszam != 166 (a kod elutasitja).
+ Minden eltereset eltereskent naplozunk es a jelentesben jelezzuk.
+
+8. UJ NYILVANOS REPO ES PREREG-ZAROLAS (a meglevo repo erintetlen marad)
+ A felhasznalo dontese: NYILVANOS uj repo, hogy a mereset megelozoen visszakereshetoen rogzitve legyen a terv, a kod verzioja es a dontesi szabalyok.
+ Cim: Qubit History Dependence: Guard-Time Control. Repo nev (angol): qubit-history-dependence-guard-control (a felhasznalo kerte az angol, idezheto nevet; ha mar letezik ilyen nev, a tarsa megall es jelzi, nem valaszt masikat).
+ A meglevo repohoz es annak fajljaihoz nem nyulunk. A tarsa hozza letre es tolti fel.
+ Tartalom (csak a kutatasi csomag): a v3 kodcsomag kicsomagolt fajlai (a fenti md5-okkal, a regi PREREG_V3_hu.txt NELKUL) + ez a dokumentum (kanonikus prereg; mas atadasi vagy jovahagyasi szoveg nem) + README.md (a 9. pont szovege: ANGOL resz eloszor, utana MAGYAR). NEM kerul fel: kulcs,
+ token, .env, account/instance azonosito, bejelentkezesi adat, a felhasznalo privat beszelgetesei vagy belso fajlok, a runs/ mappa (meresi naplok), live/offline
+ jelentes JSON-ok. Ehhez a repo .gitignore-ja: runs/, *.jobid, *report*.json, .env, __pycache__/.
+ A zarolas FUGGO, amig a push meg nem tortent: a dokumentum es a README nem allitja, hogy mar lezarva. Zarolas a ELSO hardveres blokk elott: egy "prereg lock" commit + annotalt tag (pl. prereg-lock-v3), push a nyilvanos repora; a tenyleges commit hash-t es a
+ push idopontjat a tarsa a git logbol/a GitHubrol olvassa ki es jegyzi fel (ez nem szerepelhet magaban a dokumentumban, mert onreferencia; nem talaljuk ki).
+ Blokk 0 csak ezutan indulhat. Az adatok/naplok kozzetetele es az elemzes utani uj commitok kulon, a felhasznalo dontese; a tervhez keszult valtoztatas
+ uj commit/tag es eltereskent jelolt, a lock commitot nem irjuk at.
+
+9. README.md TARTALMA (a tarsa ezt mentse README.md-kent a repo gyokerebe; a sorrend kotott: English, majd Magyar)
+-----8<-----
+# Qubit History Dependence: Guard-Time Control
+
+Repository: qubit-history-dependence-guard-control. Author: Mate Robert, ORCID https://orcid.org/0009-0003-3986-6039. DOI: pending. A GitHub repository alone has no DOI; one exists only after a tagged release is archived on Zenodo. No DOI is stated here until a real one is issued.
+
+## English
+
+Pre-registration and code for a single-session test of a realized history contrast D on one qubit pair (ibm_marrakesh, q21/q20).
+Status: the protocol becomes locked only when the "prereg lock" commit and tag are pushed, before any hardware data; until then it is pending. Nothing here is a result.
+
+- Question: realized rest-dependent contrast D = Lambda(0) - 0.5*(Lambda(16)+Lambda(64)) over 16 blocks, t(15) 95% CI,
+  primary analysis = analyzer3.analyze_campaign on all segments pooled. No mechanism claim; population validity is not established.
+- Design: 16 blocks = 16 Sampler jobs, each 2 circuits x 166 shots; each circuit has 36 segments with its own 2-bit register.
+  Inter-segment guard is short (250 us) or long (1000 us), alternating pattern per block; plain measure; rep_delay/init_qubits left at the
+  Runtime defaults (init_qubits True, rep_delay = backend default; the default value is recorded by hand before block 0, the runner does not log it).
+- Interpretation fixed in advance: A) CI excludes 0: nonzero contrast observed in this run (no mechanism/carryover/population claim);
+  B) CI includes 0 and upper bound < +0.08: no evidence of an effect as large as +0.08 in this run; C) inconclusive. Exploratory diagnostics
+  (D by guard class, G0 predecessor contrast) are descriptive only.
+- Stopping: usage-based only. Before each block, the sum of final usage plus remaining blocks times the largest block usage so far must be <= 304 s;
+  otherwise stop and report an incomplete campaign (descriptive only). This is a forecast, not a hard guarantee of staying within 304 s. Any failed or unknown job: stop, no reruns. No outcome-based stopping, no interim CI.
+- Citation: Mate Robert, ORCID 0009-0003-3986-6039. DOI pending (Zenodo archive of a tagged release required); none is claimed until issued.
+- Limits: service acceptance, sub-job count and real usage unknown before block 0; carryover and drift are not separated from the effect;
+  power numbers (about 85% for input D = +0.08) come from an assumed model, not hardware.
+- Use: python test_v3.py (offline tests), python runner_v3.py --plan, --plan --live (read-only), --submit --live --block K (one job per call, run by the owner only),
+  --analyze. See PREREG_hu.txt for the full protocol (Hungarian).
+
+## Magyar
+
+Elore regisztralt terv es kod egy mereshez: realizalt elozmeny-kontraszt D egy qubitparon (ibm_marrakesh, q21/q20). Allapot: a protokoll csak a "prereg lock" commit es tag pusholasa utan
+lezart (hardveres adat elott); addig fuggo. Itt nincs eredmeny.
+
+- Kerdes: realizalt rest-fuggo kontraszt D = Lambda(0) - 0,5*(Lambda(16)+Lambda(64)), 16 blokk, t(15) 95% CI, primer elemzes: analyzer3.analyze_campaign az osszes
+  szegmensre poolozva. Mechanizmus-allitas nincs, populacio-ervenyesseg nincs igazolva.
+- Terv: 16 blokk = 16 Sampler job, mindegyik 2 kor x 166 shot; egy kor 36 szegmens, szegmensenkent sajat 2 bites regiszterrel. A szegmensek kozti guard rovid (250 us) vagy
+  hosszu (1000 us), blokkonkent valtakozo minta; plain measure; rep_delay/init_qubits a Runtime alapertelmezesen (init_qubits True, rep_delay = backend alap; az alapertek
+  kezzel rogzitendo blokk 0 elott, a runner nem naploz).
+- Ertelmezes elore: A) CI nem tartalmazza 0-t: nemnulla kontraszt ebben a futasban (mechanizmus/atcsuszas/populacio nincs allitva); B) CI tartalmazza 0-t es felso hatar < +0,08:
+  nincs bizonyitek +0,08 nagysagu hatasra ebben a futasban; C) nem eldontheto. Feltaro diagnosztika (D guard-osztalyonkent, G0 elozmeny-kontraszt) csak leiro.
+- Leallitas: csak hasznalatalapu. Minden blokk elott: vegleges usage-ok osszege + hatralevo blokkok x eddigi legnagyobb blokk-usage <= 304 s; kulonben leallas es hianyos kampany
+  (csak leiro). Eredmeny alapu leallitas es kozbulso CI nincs; hibas/ismeretlen job: STOP (nincs ujrainditas).
+- Hivatkozas: Mate Robert, ORCID 0009-0003-3986-6039. DOI fuggo (Zenodo-archivalt, cimkezett kiadas kell); tenyleges DOI-t addig nem allitunk.
+- Korlatok: szolgaltatas-elfogadas, sub-job szam es tenyleges usage blokk 0 elott ismeretlen; atcsuszas es drift nincs elvalasztva a hatastol; a teljesitmeny-szamok (~85%, D=+0,08
+  bemenettel) feltetelezett modellbol jonnek, nem hardverbol.
+- Hasznalat: python test_v3.py, python runner_v3.py --plan, --plan --live (csak olvas), --submit --live --block K (hivasonkent 1 job, csak a tulajdonos futtatja), --analyze.
+  A teljes protokoll: PREREG_hu.txt.
+-----8<-----
+
+11. MUKODESI SORREND A TARSNAK (a vegrehajto megall minden lepes utan jelzett pontnal)
+ 1) Uj NYILVANOS repo: qubit-history-dependence-guard-control (ha a nev foglalt: megall, jelez). A meglevo repohoz nem nyul.
+ 2) Feltolti csak a 8. pont szerinti tartalmat + README.md (angol, majd magyar) + .gitignore; "prereg lock" commit + annotalt tag, push.
+ 3) Lefuttatja a 3. pont csak-olvaso parancsat, elmenti a kimenetet.
+ 4) MEGALL es jelenti: a repo URL-t, a lock commit hash-t es push idopontot (git logbol), a rep_delay/default ertekeket. Egyetlen job sem indul.
+ 5) Job-ot csak a tulajdonos kulon inditasara: blokkonkent, az 5. pont kapuja szerint (GO), hiba/ismeretlen job eseten STOP. Az 5. pont kapuja elorejelzes, nem kemeny
+    garancia a 304 s-ra: a kvota-kockazat (a becsles kb. 185 s, nem ellenorzott) nyitva marad, es a futas hianyosan is leallhat. Eredmeny nem igert.
+
+12. DOI ES ORCID
+ Szerzo: Mate Robert (a nev irasmodjat a tulajdonos ellenorzi), ORCID https://orcid.org/0009-0003-3986-6039 (a tulajdonos sajat megadasa es nyilvanos GitHub-profilja).
+ A repo gyokerebe CITATION.cff kerul csak az ismert mezokkel: title, authors (name + orcid), repository-code (a tenyleges URL), license csak ha a tulajdonos valasztott.
+ A "doi:" mezo es a DOI-jelveny kimarad, amig nincs tenyleges DOI; akkor kerul be, a lock commit nem iratik at, hanem uj commit.
+ DOI-elokeszites: a repo Zenodo-GitHub integracioval (a tulajdonosnak mar van) engedelyezheto. A DOI egy GitHub release-bol (pl. tag v0-prereg) jon letre, amikor
+ az archivalas megtortenik. A release/archivalas kulon nyilvanos lepes: a tarsa csak akkor vegzi, ha a tulajdonos kifejezetten jovahagyta; a keletkezett tenyleges DOI-t jelenti.
+ Amig ez nem tortent meg, a DOI allapota: fuggo (nem "nem lesz").
+
+13. KORLATOK (nyitva)
+ Szolgaltatas-elfogadas (~28 ms-os kor, 250000 dt delay) nem igazolt; a tenyleges chunk/sub-job szam es usage ismeretlen blokk 0 elott; valos atcsuszas/drift,
+ reset-hatekonysag, a hosszu guard hatasa ms-skalaju folyamatokra, a modell validitasa (assumed-model: D=+0,08 bemenettel ~85% CI-zart 0-t, 600 futas;
+ D=0 bemenettel ~5-6%).

@@ -1,0 +1,8 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "Qubit History Dependence: Guard-Time Control"
+authors:
+  - family-names: "Mate"
+    given-names: "Robert"
+    orcid: "https://orcid.org/0009-0003-3986-6039"
+repository-code: "https://github.com/silentnoisehun/qubit-history-dependence-guard-control"

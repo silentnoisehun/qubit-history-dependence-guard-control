@@ -1,4 +1,3 @@
-runs/
 *.jobid
 *report*.json
 .env
